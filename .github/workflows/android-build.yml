@@ -36,8 +36,8 @@ jobs:
           mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           mv cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
 
-          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT"
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "build-tools;34.0.0"
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses --sdk_root="$ANDROID_SDK_ROOT" --channel=3
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --channel=3 "platform-tools" "build-tools;34.0.0" "build-tools;37.0.0-rc1"
           ls -la $ANDROID_SDK_ROOT/build-tools
 
           export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
@@ -68,7 +68,7 @@ jobs:
         run: |
           export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
           export ANDROID_SDK_ROOT=$ANDROID_HOME
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$ANDROID_HOME/build-tools/37.0.0-rc1:$PATH
           buildozer -v android debug
 
       - name: Upload APK artifact

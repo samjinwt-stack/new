@@ -56,11 +56,14 @@ jobs:
 
           echo "ANDROID_SDK_ROOT=$SDKROOT" >> $GITHUB_ENV
           echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$SDKROOT" >> $GITHUB_ENV
+
           echo "$SDKROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
           echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
           echo "$SDKROOT/build-tools/34.0.0" >> $GITHUB_PATH
 
-          # 3) 라이선스 자동 동의(★ buildozer가 쓰는 tools/bin/sdkmanager로 수행)
+          # 3) 라이선스 자동 동의
           yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --licenses
 
           # 4) 필요한 것들 설치(★ 34.0.0 강제)
@@ -69,7 +72,7 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-          # 5) aidl 존재 확인(없으면 여기서 바로 실패)
+          # 5) aidl 존재 확인
           test -f "$SDKROOT/build-tools/34.0.0/aidl"
           echo "✅ aidl OK"
 
@@ -102,7 +105,8 @@ jobs:
           set -euo pipefail
           export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          export PATH="$ANDROID_HOME/tools/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
+          export ANDROIDSDK="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
 
           buildozer -v android debug
 

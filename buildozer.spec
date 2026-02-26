@@ -9,9 +9,10 @@ version = 0.1.0
 requirements = python3,kivy,requests
 orientation = portrait
 fullscreen = 0
-android.build_tools_version = 34.0.0
 
-android.permissions = INTERNET
+android.api = 34
+android.build_tools_version = 34.0.0
+android.permission = INTERNET
 
 [buildozer]
 log_level = 2

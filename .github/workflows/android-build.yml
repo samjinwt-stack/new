@@ -23,35 +23,51 @@ jobs:
             git zip unzip openjdk-17-jdk \
             build-essential ccache \
             libffi-dev libssl-dev \
-            autoconf automake libtool pkg-config
+            autoconf automake libtool pkg-config \
+            liblz4-tool zlib1g-dev
 
           python -m pip install --upgrade pip
           pip install buildozer cython
 
       # -------------------------------------------------
-      # 🔥 핵심: SDK 라이선스 + 34.0.0 강제 설치
+      # 🔥 핵심: SDK 라이선스 + build-tools 34.0.0 고정 설치
       # -------------------------------------------------
       - name: Pre-install Android SDK components
+        shell: bash
         run: |
-          mkdir -p $HOME/.buildozer/android/platform
-          cd $HOME/.buildozer/android/platform
+          set -e
 
-          # command line tools 다운로드
-          mkdir -p android-sdk
-          cd android-sdk
-          curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q sdk.zip
-          mkdir -p cmdline-tools
-          mv cmdline-tools cmdline-tools/latest || true
+          SDKROOT="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDKROOT/cmdline-tools"
 
-          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          cd /tmp
+          curl -L -o cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          rm -rf /tmp/cmdline-tools
+          unzip -q cmdline.zip -d /tmp/cmdline-tools
 
-          yes | sdkmanager --licenses
+          # ✅ unzip 결과는 /tmp/cmdline-tools/cmdline-tools/* 이므로
+          #    그 안을 SDKROOT/cmdline-tools/latest 로 옮긴다
+          rm -rf "$SDKROOT/cmdline-tools/latest"
+          mkdir -p "$SDKROOT/cmdline-tools/latest"
+          cp -r /tmp/cmdline-tools/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
 
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-34"
-          sdkmanager "build-tools;34.0.0"
+          # ✅ 다음 step에서도 계속 쓰도록 ENV/PATH 고정
+          echo "ANDROID_SDK_ROOT=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          echo "$SDKROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
+          echo "$SDKROOT/build-tools/34.0.0" >> $GITHUB_PATH
+
+          # 라이선스 자동 동의 + 필수 패키지 설치
+          yes | sdkmanager --sdk_root="$SDKROOT" --licenses
+          sdkmanager --sdk_root="$SDKROOT" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+          # 확인용
+          sdkmanager --sdk_root="$SDKROOT" --list | head -n 50
+          ls -la "$SDKROOT/build-tools/34.0.0" | head -n 50
 
       # -------------------------------------------------
       # Notion secrets 주입
@@ -77,10 +93,12 @@ jobs:
       # APK 빌드
       # -------------------------------------------------
       - name: Build APK (debug)
+        shell: bash
         run: |
-          export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-          export ANDROID_SDK_ROOT=$ANDROID_HOME
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
+          set -e
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          which sdkmanager || true
+          sdkmanager --version || true
           buildozer -v android debug
 
       # -------------------------------------------------

@@ -31,7 +31,8 @@ jobs:
           python -m pip install cython buildozer
 
       - name: Accept Android SDK licenses
-        run: yes | buildozer android sdkmanager --licenses
+        run: |
+         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true  
 
       - name: Inject Notion secrets into config.json
         env:

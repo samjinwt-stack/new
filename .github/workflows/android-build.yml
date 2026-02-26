@@ -7,7 +7,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # ✅ Buildozer가 보게 될 SDK 경로를 "job 전체"로 고정
+    # ✅ SDK 경로를 Job 전체에 고정
     env:
       SDKROOT: /home/runner/.buildozer/android/platform/android-sdk
       ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
@@ -36,25 +36,24 @@ jobs:
           pip install buildozer cython
 
       # -------------------------------------------------
-      # ✅ SDKROOT에 cmdline-tools 설치 + tools/bin/sdkmanager를 최신으로 강제 링크
+      # ✅ Android SDK 강제 설치 (Preview 차단)
       # -------------------------------------------------
-      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0 + accept licenses)
+      - name: Install Android SDK (API34 + build-tools 34.0.0)
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
 
           mkdir -p "$SDKROOT"
 
           cd /tmp
           curl -L -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          rm -rf /tmp/cmdline && mkdir -p /tmp/cmdline
-          unzip -q sdk.zip -d /tmp/cmdline
+          rm -rf cmdline && mkdir cmdline
+          unzip -q sdk.zip -d cmdline
 
           rm -rf "$SDKROOT/cmdline-tools/latest"
           mkdir -p "$SDKROOT/cmdline-tools/latest"
-          cp -r /tmp/cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
+          cp -r cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
 
-          # buildozer가 호출하는 legacy 경로를 최신 sdkmanager로 강제 연결
           mkdir -p "$SDKROOT/tools/bin"
           ln -sf "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" "$SDKROOT/tools/bin/sdkmanager"
           ln -sf "$SDKROOT/cmdline-tools/latest/bin/avdmanager" "$SDKROOT/tools/bin/avdmanager" || true
@@ -64,17 +63,18 @@ jobs:
           echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
           echo "$SDKROOT/build-tools/34.0.0" >> $GITHUB_PATH
 
-          # 라이선스 자동 동의 (여기서 확실히 끝내버림)
-          yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --licenses
+          # ✅ Preview 채널 차단 (--channel=0)
+          yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 --licenses || true
 
-          # 필요한 컴포넌트 설치
-          "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" \
+          # ✅ 안정판만 설치
+          "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
+          # aidl 확인
           test -f "$SDKROOT/build-tools/34.0.0/aidl"
-          echo "✅ aidl OK"
+          echo "✅ Android SDK ready"
 
       # -------------------------------------------------
       # Notion secrets 주입
@@ -99,10 +99,10 @@ jobs:
       # -------------------------------------------------
       # APK 빌드
       # -------------------------------------------------
-      - name: Build APK (debug)
+      - name: Build APK
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
           buildozer -v android debug
 

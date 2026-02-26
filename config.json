@@ -1,0 +1,19 @@
+{
+  "notion_token": "secret_여기에_토큰을_넣으세요",
+  "database_id": "25cbcba8-5be2-8188-9ffb-c95ef6ecee8d",
+  "properties": {
+    "worker": "작업자",
+    "work_date": "날짜",
+    "content": "작업내용"
+  },
+  "workers": [
+    "충북해",
+    "배성학",
+    "박진영",
+    "박현철",
+    "조성규",
+    "이상원",
+    "하진우"
+  ],
+  "notion_version": "2022-06-28"
+}

@@ -25,11 +25,37 @@ jobs:
             libffi-dev libssl-dev \
             autoconf automake libtool pkg-config
 
-      - name: Install Buildozer + Cython
-        run: |
           python -m pip install --upgrade pip
-          pip install --user buildozer cython
+          pip install buildozer cython
 
+      # -------------------------------------------------
+      # 🔥 핵심: SDK 라이선스 + 34.0.0 강제 설치
+      # -------------------------------------------------
+      - name: Pre-install Android SDK components
+        run: |
+          mkdir -p $HOME/.buildozer/android/platform
+          cd $HOME/.buildozer/android/platform
+
+          # command line tools 다운로드
+          mkdir -p android-sdk
+          cd android-sdk
+          curl -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q sdk.zip
+          mkdir -p cmdline-tools
+          mv cmdline-tools cmdline-tools/latest || true
+
+          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+
+          yes | sdkmanager --licenses
+
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-34"
+          sdkmanager "build-tools;34.0.0"
+
+      # -------------------------------------------------
+      # Notion secrets 주입
+      # -------------------------------------------------
       - name: Inject Notion secrets into config.json
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -39,46 +65,27 @@ jobs:
           import json, os
           path = "config.json"
           with open(path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
+              cfg = json.load(f)
           cfg["notion_token"] = os.environ["NOTION_TOKEN"].strip()
           cfg["database_id"] = os.environ["NOTION_DBID"].strip()
           with open(path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, ensure_ascii=False, indent=2)
+              json.dump(cfg, f, ensure_ascii=False, indent=2)
           print("config.json injected.")
           PY
 
-
-      - name: Preinstall Android SDK packages + accept licenses
-        run: |
-          set -e
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-      
-          buildozer -v android debug || true
-
-          if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMAN="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          else
-            SDKMAN="$SDK/tools/bin/sdkmanager"
-          fi
-
-          echo "Using sdkmanager: $SDKMAN"
-          yes | "$SDKMAN" --sdk_root="$SDK" --licenses
-
-    
-          yes | "$SDKMAN" --sdk_root="$SDK" "platform-tools"
-          yes | "$SDKMAN" --sdk_root="$SDK" "platforms;android-34"
-          yes | "$SDKMAN" --sdk_root="$SDK" "build-tools;34.0.0"
-          # (로그에서 37 rc1을 요구하는 경우 대비: 프리뷰 빌드툴도 미리 설치)
-          yes | "$SDKMAN" --sdk_root="$SDK" "build-tools;37.0.0-rc1" || true
-
-          echo "Installed build-tools:"
-          ls -la "$SDK/build-tools" || true
-
+      # -------------------------------------------------
+      # APK 빌드
+      # -------------------------------------------------
       - name: Build APK (debug)
         run: |
+          export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH
           buildozer -v android debug
 
+      # -------------------------------------------------
+      # APK 업로드
+      # -------------------------------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

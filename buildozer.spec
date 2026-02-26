@@ -1,6 +1,6 @@
 [app]
 
-# (str) Title of your application
+# (str) Application title
 title = WorkLogNotion
 
 # (str) Package name
@@ -21,7 +21,7 @@ requirements = python3,kivy,requests
 # (str) Application version
 version = 1.0
 
-# (str) Orientation
+# (str) Supported orientation
 orientation = portrait
 
 # (bool) Fullscreen
@@ -29,40 +29,46 @@ fullscreen = 0
 
 
 # -------------------------------------------------
-# ANDROID SETTINGS (이게 핵심)
+# ANDROID 설정 (🔥 중요)
 # -------------------------------------------------
 
-# Target Android API
+# Target API
 android.api = 34
 
-# Minimum API
+# Minimum supported API
 android.minapi = 23
 
 # SDK version
 android.sdk = 34
 
-# NDK version (p4a 권장)
+# Recommended NDK for p4a
 android.ndk = 25b
 
-# 🔥 중요: Preview 막고 안정판 build-tools 고정
+# 🔥 Preview 차단 — 안정 버전 고정
 android.build_tools = 34.0.0
 
-# Architecture
+# Architecture (Play Store 기준 arm64 필수)
 android.arch = arm64-v8a
 
-# Permissions (필요한 것만)
+# Required permissions
 android.permissions = INTERNET
 
+# Android entrypoint
+android.entrypoint = org.kivy.android.PythonActivity
+
+# (optional) Prevent automatic version changes
+android.allow_backup = False
+
+
 # -------------------------------------------------
-# Buildozer options
+# Buildozer 설정
 # -------------------------------------------------
 
 log_level = 2
-
 warn_on_root = 1
 
 
 [buildozer]
 
-# (int) Log level (0 = error only, 1 = info, 2 = debug)
+# Debug log level
 log_level = 2

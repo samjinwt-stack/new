@@ -1,0 +1,58 @@
+name: Build Android APK (Kivy)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            build-essential ccache \
+            libffi-dev libssl-dev \
+            autoconf automake libtool pkg-config
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cython buildozer
+
+      - name: Inject Notion secrets into config.json
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DBID: ${{ secrets.NOTION_DBID }}
+        run: |
+          python - <<'PY'
+          import json, os
+          path = "config.json"
+          with open(path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+          cfg["notion_token"] = os.environ["NOTION_TOKEN"].strip()
+          cfg["database_id"] = os.environ["NOTION_DBID"].strip()
+          with open(path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+          print("config.json injected.")
+          PY
+
+      - name: Build APK (debug)
+        run: |
+          buildozer -v android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkLogNotion-APK
+          path: bin/*.apk

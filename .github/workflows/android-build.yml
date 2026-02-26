@@ -37,8 +37,10 @@ jobs:
           mv cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
 
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;34.0.0"
-  
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;37.0.0-rc1"
+
+          export ANDROIDSDK=$ANDROID_SDK_ROOT
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
      
       - name: Inject Notion secrets into config.json
         env:
@@ -59,6 +61,9 @@ jobs:
 
       - name: Build APK (debug)
         run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export ANDROIDSDK=$HOME/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
           buildozer -v android debug
 
       - name: Upload APK artifact

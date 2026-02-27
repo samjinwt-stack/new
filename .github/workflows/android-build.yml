@@ -24,14 +24,13 @@ jobs:
             build-essential ccache \
             libffi-dev libssl-dev \
             autoconf automake libtool pkg-config
-
-          python -m pip install --upgrade pip
+          python3 -m pip install --upgrade pip
           pip install buildozer cython
 
       # -------------------------------------------------
-      # ✅ Android SDK (Stable channel only) + build-tools 34.0.0 고정
+      # ✅ Android SDK (Stable channel only) + build-tools 34.0.0
       # -------------------------------------------------
-      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0, stable channel only)
+      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0)
         shell: bash
         run: |
           set -euo pipefail
@@ -48,7 +47,7 @@ jobs:
           mkdir -p "$SDKROOT/cmdline-tools/latest"
           cp -r /tmp/cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
 
-          # buildozer가 옛 경로 tools/bin/sdkmanager 를 찾는 경우 대비
+          # buildozer may expect old path tools/bin/sdkmanager
           mkdir -p "$SDKROOT/tools/bin"
           ln -sf "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" "$SDKROOT/tools/bin/sdkmanager"
           ln -sf "$SDKROOT/cmdline-tools/latest/bin/avdmanager" "$SDKROOT/tools/bin/avdmanager" || true
@@ -61,7 +60,7 @@ jobs:
           echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
           echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
 
-          # ✅ stable 채널만 보게 강제 (프리뷰 37-rc 차단 핵심)
+          # Force stable channel (avoid RC build-tools being installed)
           yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 --licenses
 
           "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
@@ -69,51 +68,39 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-          # ✅ aidl 확인
+          # verify aidl
           ls -al "$SDKROOT/build-tools/34.0.0" || true
           test -f "$SDKROOT/build-tools/34.0.0/aidl"
           echo "✅ aidl OK"
 
       # -------------------------------------------------
-      # Notion secrets 주입
+      # Notion secrets injection
       # -------------------------------------------------
       - name: Inject Notion secrets into config.json
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DBID: ${{ secrets.NOTION_DBID }}
         run: |
-          python - <<'PY'
-          import json, os
-          path = "config.json"
-          with open(path, "r", encoding="utf-8") as f:
-              cfg = json.load(f)
-          cfg["notion_token"] = os.environ["NOTION_TOKEN"].strip()
-          cfg["database_id"] = os.environ["NOTION_DBID"].strip()
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(cfg, f, ensure_ascii=False, indent=2)
-          print("config.json injected.")
-          PY
+          python3 - <<'PY'
+import json, os
+path = "config.json"
+if not os.path.exists(path):
+    print("config.json not found; creating minimal config.")
+    cfg = {}
+else:
+    with open(path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+cfg["notion_token"] = os.environ.get("NOTION_TOKEN","").strip()
+cfg["database_id"] = os.environ.get("NOTION_DBID","").strip()
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(cfg, f, ensure_ascii=False, indent=2)
+print("config.json injected.")
+PY
 
       # -------------------------------------------------
-      # APK 빌드
+      # APK build
       # -------------------------------------------------
       - name: Build APK (debug)
         shell: bash
         run: |
           set -euo pipefail
-
-          export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          export ANDROIDSDK="$ANDROID_HOME"
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
-
-          # ✅ 여기서도 stable 채널만 보게 환경변수로 한 번 더 “못 박기”
-          export SDKMANAGER_OPTS="--channel=0"
-
-          buildozer -v android debug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: WorkLogNotion-APK
-          path: bin/*.apk

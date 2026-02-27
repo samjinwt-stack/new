@@ -1,85 +1,105 @@
-[app]
-# (필수) 앱 이름
-title = WorkLogNotion
+name: Build Android APK (Kivy)
 
-# (필수) 패키지명 (영문 소문자/숫자/언더바만)
-package.name = worklognotion
+on:
+  workflow_dispatch:
 
-# (필수) 도메인 (회사/개인)
-package.domain = com.samjinwt
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-# 소스 경로
-source.dir = .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-# 포함 확장자
-source.include_exts = py,kv,png,jpg,jpeg,webp,json,txt,ini,ttf,otf,atlas
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-# 제외(필요시)
-# source.exclude_exts =
-# source.exclude_dirs = tests,bin,build
-# source.exclude_patterns = */__pycache__/*,*.pyc,*.pyo,.git/*,.github/*
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            build-essential ccache \
+            libffi-dev libssl-dev \
+            autoconf automake libtool pkg-config
 
-# 버전
-version = 0.1.0
+          python -m pip install --upgrade pip
+          pip install buildozer cython
 
-# 기본 화면 방향
-orientation = portrait
+      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0 + accept licenses)
+        shell: bash
+        run: |
+          set -euo pipefail
 
-# (선택) 아이콘/스플래시
-# icon.filename = assets/icon.png
-# presplash.filename = assets/presplash.png
+          SDKROOT="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDKROOT"
 
-# (중요) 의존성
-# - notion-client 쓰면: notion-client
-# - requests 쓰면: requests
-# - 너 프로젝트 실제 import 기준으로 맞춰야 함
-requirements = python3,kivy,requests,notion-client
+          cd /tmp
+          curl -L -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          rm -rf /tmp/cmdline && mkdir -p /tmp/cmdline
+          unzip -q sdk.zip -d /tmp/cmdline
 
-# 엔트리포인트(기본 main.py)
-entrypoint = main.py
+          rm -rf "$SDKROOT/cmdline-tools/latest"
+          mkdir -p "$SDKROOT/cmdline-tools/latest"
+          cp -r /tmp/cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
 
-# (선택) 권한/전체화면
-fullscreen = 0
+          mkdir -p "$SDKROOT/tools/bin"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" "$SDKROOT/tools/bin/sdkmanager"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/avdmanager" "$SDKROOT/tools/bin/avdmanager" || true
 
-# (선택) 로그레벨
-log_level = 2
+          echo "ANDROID_SDK_ROOT=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$SDKROOT" >> $GITHUB_ENV
 
+          echo "$SDKROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
+          echo "$SDKROOT/build-tools/34.0.0" >> $GITHUB_PATH
 
-[buildozer]
-# 빌드 디렉토리 기본값 사용
-warn_on_root = 1
+          # licenses (실패해도 진행)
+          yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --licenses || true
 
+          # ✅ stable 채널만 (Preview/rc 막기)
+          "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
-[android]
-# ✅ 타겟/최소 API
-android.api = 34
-android.minapi = 24
+          test -f "$SDKROOT/build-tools/34.0.0/aidl"
+          echo "✅ aidl OK"
 
-# ✅ build-tools "고정" (이거 안 하면 p4a가 37-rc 같은 걸 잡아감)
-android.build_tools_version = 34.0.0
+      - name: Inject Notion secrets into config.json
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DBID: ${{ secrets.NOTION_DBID }}
+        run: |
+          python - <<'PY'
+          import json, os
+          path = "config.json"
+          with open(path, "r", encoding="utf-8") as f:
+              cfg = json.load(f)
+          cfg["notion_token"] = os.environ["NOTION_TOKEN"].strip()
+          cfg["database_id"] = os.environ["NOTION_DBID"].strip()
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(cfg, f, ensure_ascii=False, indent=2)
+          print("config.json injected.")
+          PY
 
-# ✅ 아키텍처 (둘 다 만들면 용량/시간 증가)
-android.archs = arm64-v8a,armeabi-v7a
+      - name: Build APK (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROIDSDK="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
 
-# ✅ 권한 (노션 통신이면 INTERNET 필수)
-android.permissions = INTERNET,ACCESS_NETWORK_STATE
+          buildozer -v android debug
 
-# ✅ Gradle/AndroidX
-android.enable_androidx = True
-
-# ✅ SDK 라이선스 자동 동의(빌드 환경에 따라 도움 됨)
-android.accept_sdk_license = True
-
-# ✅ 여기 “제일 중요”: p4a가 SDK 업데이트/자동설치 하지 못하게 막음
-p4a.extra_args = --no-sdk-update
-
-# (선택) 로그 줄이기/빌드 안정화용
-# android.gradle_dependencies =
-# android.use_lea = False
-# android.debuggable = 1
-
-# (선택) NDK 고정 (GitHub Actions에서 설치한 NDK랑 맞출 때)
-# android.ndk = 25b
-
-# (선택) manifest 커스텀 필요하면
-# android.manifest_placeholders = ...
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkLogNotion-APK
+          path: bin/*.apk

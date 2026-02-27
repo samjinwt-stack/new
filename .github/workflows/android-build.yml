@@ -27,9 +27,6 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install buildozer cython
 
-      # -------------------------------------------------
-      # ✅ Android SDK (Stable channel only) + build-tools 34.0.0
-      # -------------------------------------------------
       - name: Pre-install Android SDK components (API34 + build-tools 34.0.0)
         shell: bash
         run: |
@@ -74,9 +71,6 @@ jobs:
           test -f "$SDKROOT/build-tools/34.0.0/aidl"
           echo "✅ aidl OK"
 
-      # -------------------------------------------------
-      # Notion secrets injection
-      # -------------------------------------------------
       - name: Inject Notion secrets into config.json
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -97,7 +91,15 @@ with open(path, "w", encoding="utf-8") as f:
 print("config.json injected.")
 PY
 
-      # -------------------------------------------------
-      # APK build
-      # -------------------------------------------------
       - name: Build APK (debug)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROIDSDK="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
+
+          # ensure sdkmanager uses stable channel
+          export SDKMANAGER_OPTS="--channel=0"

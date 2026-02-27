@@ -16,17 +16,11 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git zip unzip \
+            git zip unzip openjdk-17-jdk \
             build-essential ccache \
             libffi-dev libssl-dev \
             autoconf automake libtool pkg-config
@@ -34,29 +28,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install buildozer cython
 
-      # ✅ Android SDK를 "공식 경로"로 설치 (여기가 제일 안정적)
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      # ✅ 필요한 SDK 구성요소를 확실히 설치 + 라이선스 자동 수락
-      - name: Install Android SDK packages (API34 + build-tools 34.0.0)
+      # -------------------------------------------------
+      # ✅ Android SDK (Stable channel only) + build-tools 34.0.0 고정
+      # -------------------------------------------------
+      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0, stable channel only)
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
+          SDKROOT="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDKROOT"
 
-          yes | sdkmanager --licenses || true
+          cd /tmp
+          curl -L -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          rm -rf /tmp/cmdline && mkdir -p /tmp/cmdline
+          unzip -q sdk.zip -d /tmp/cmdline
 
-          sdkmanager \
+          rm -rf "$SDKROOT/cmdline-tools/latest"
+          mkdir -p "$SDKROOT/cmdline-tools/latest"
+          cp -r /tmp/cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
+
+          # buildozer가 옛 경로 tools/bin/sdkmanager 를 찾는 경우 대비
+          mkdir -p "$SDKROOT/tools/bin"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" "$SDKROOT/tools/bin/sdkmanager"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/avdmanager" "$SDKROOT/tools/bin/avdmanager" || true
+
+          echo "ANDROID_SDK_ROOT=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$SDKROOT" >> $GITHUB_ENV
+
+          echo "$SDKROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
+
+          # ✅ stable 채널만 보게 강제 (프리뷰 37-rc 차단 핵심)
+          yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 --licenses
+
+          "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
             "platform-tools" \
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-          # ✅ aidl 존재 확인 (여기서 없으면 100% 실패)
-          test -f "$ANDROID_SDK_ROOT/build-tools/34.0.0/aidl"
-          echo "✅ aidl OK: $ANDROID_SDK_ROOT/build-tools/34.0.0/aidl"
+          # ✅ aidl 확인
+          ls -al "$SDKROOT/build-tools/34.0.0" || true
+          test -f "$SDKROOT/build-tools/34.0.0/aidl"
+          echo "✅ aidl OK"
 
       # -------------------------------------------------
       # Notion secrets 주입
@@ -86,21 +102,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ✅ Buildozer가 무조건 이 SDK를 보게 강제
-          export ANDROID_HOME="$ANDROID_SDK_ROOT"
-          export ANDROID_SDK_ROOT="$ANDROID_SDK_ROOT"
-          export ANDROIDSDK="$ANDROID_SDK_ROOT"
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/34.0.0:$PATH"
+          export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROIDSDK="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
 
-          # 디버깅 로그용 (문제 나면 여기 출력 보면 됨)
-          ls -al "$ANDROID_SDK_ROOT/build-tools" || true
-          ls -al "$ANDROID_SDK_ROOT/build-tools/34.0.0" || true
+          # ✅ 여기서도 stable 채널만 보게 환경변수로 한 번 더 “못 박기”
+          export SDKMANAGER_OPTS="--channel=0"
 
           buildozer -v android debug
 
-      # -------------------------------------------------
-      # APK 업로드
-      # -------------------------------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

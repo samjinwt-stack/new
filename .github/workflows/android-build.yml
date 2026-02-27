@@ -77,7 +77,6 @@ jobs:
               json.dump(cfg, f, ensure_ascii=False, indent=2)
           print("config.json injected.")
           PY
-
       - name: Build APK (debug)
         shell: bash
         run: |

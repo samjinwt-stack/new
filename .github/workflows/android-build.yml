@@ -23,41 +23,40 @@ jobs:
             git zip unzip openjdk-17-jdk \
             build-essential ccache \
             libffi-dev libssl-dev \
-            autoconf automake libtool pkg-config \
-            libltdl-dev libgmp-dev zlib1g-dev
+            autoconf automake libtool pkg-config
           python3 -m pip install --upgrade pip
-          pip install buildozer cython==0.29.33
+          pip install buildozer cython
 
-      - name: Pre-install Android SDK components
+      - name: Pre-install Android SDK components (API34 + build-tools 34.0.0)
         shell: bash
         run: |
           set -euo pipefail
-
-          # SDK 경로 설정
           SDKROOT="$HOME/.buildozer/android/platform/android-sdk"
-          mkdir -p "$SDKROOT/cmdline-tools"
-
-          # Command line tools 다운로드
+          mkdir -p "$SDKROOT"
+          cd /tmp
           curl -L -o sdk.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          rm -rf /tmp/cmdline && mkdir -p /tmp/cmdline
           unzip -q sdk.zip -d /tmp/cmdline
-          
-          # 구조 맞추기 (latest 폴더 중요)
+          rm -rf "$SDKROOT/cmdline-tools/latest"
           mkdir -p "$SDKROOT/cmdline-tools/latest"
           cp -r /tmp/cmdline/cmdline-tools/* "$SDKROOT/cmdline-tools/latest/"
-
-          # 환경 변수 설정
-          echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          
+          mkdir -p "$SDKROOT/tools/bin"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" "$SDKROOT/tools/bin/sdkmanager"
+          ln -sf "$SDKROOT/cmdline-tools/latest/bin/avdmanager" "$SDKROOT/tools/bin/avdmanager" || true
+          
           echo "ANDROID_SDK_ROOT=$SDKROOT" >> $GITHUB_ENV
-          echo "PATH=$SDKROOT/cmdline-tools/latest/bin:$SDKROOT/platform-tools:$PATH" >> $GITHUB_PATH
-
-          # 라이선스 수락 및 필수 패키지 설치
-          # --channel=0을 통해 개발자 버전(RC)이 아닌 안정판만 설치하도록 강제합니다.
+          echo "ANDROID_HOME=$SDKROOT" >> $GITHUB_ENV
+          echo "ANDROIDSDK=$SDKROOT" >> $GITHUB_ENV
+          echo "$SDKROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
+          echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
+          
           yes | "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDKROOT" --licenses
           "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
             "platform-tools" \
             "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "ndk;25.2.9519653"
+            "build-tools;34.0.0"
 
       - name: Inject Notion secrets into config.json
         env:
@@ -82,12 +81,11 @@ jobs:
       - name: Build APK (debug)
         shell: bash
         run: |
-          # Buildozer 실행 시 라이선스 충돌을 방지하기 위해 환경 변수 재선언
+          set -euo pipefail
           export ANDROID_HOME="$HOME/.buildozer/android/platform/android-sdk"
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROIDSDK="$ANDROID_HOME"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0:$PATH"
+          export SDKMANAGER_OPTS="--channel=0"
           
-          # 빌드 전 다시 한번 라이선스 체크 (가장 안전한 방법)
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
-          
-          # Buildozer 실행
           buildozer android debug

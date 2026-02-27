@@ -60,9 +60,10 @@ jobs:
           echo "$SDKROOT/tools/bin" >> $GITHUB_PATH
           echo "$SDKROOT/platform-tools" >> $GITHUB_PATH
 
-          # Force stable channel (avoid RC build-tools being installed)
+          # Accept licenses on stable channel (avoid RC versions)
           yes | "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 --licenses
 
+          # Install stable packages
           "$SDKROOT/tools/bin/sdkmanager" --sdk_root="$SDKROOT" --channel=0 \
             "platform-tools" \
             "platforms;android-34" \
@@ -85,13 +86,12 @@ jobs:
 import json, os
 path = "config.json"
 if not os.path.exists(path):
-    print("config.json not found; creating minimal config.")
     cfg = {}
 else:
     with open(path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-cfg["notion_token"] = os.environ.get("NOTION_TOKEN","").strip()
-cfg["database_id"] = os.environ.get("NOTION_DBID","").strip()
+cfg["notion_token"] = os.environ.get("NOTION_TOKEN", "").strip()
+cfg["database_id"] = os.environ.get("NOTION_DBID", "").strip()
 with open(path, "w", encoding="utf-8") as f:
     json.dump(cfg, f, ensure_ascii=False, indent=2)
 print("config.json injected.")
@@ -101,6 +101,3 @@ PY
       # APK build
       # -------------------------------------------------
       - name: Build APK (debug)
-        shell: bash
-        run: |
-          set -euo pipefail
